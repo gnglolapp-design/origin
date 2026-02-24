@@ -1,0 +1,59 @@
+name: Origins DB Sync
+
+on:
+  schedule:
+    - cron: "0 0 */3 * *"  # toutes les 72h (UTC)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache HF models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/torch
+          key: hf-${{ runner.os }}-opusmt-enfr-v1
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Run sync
+        env:
+          DISCORD_WEBHOOKS: ${{ secrets.DISCORD_WEBHOOKS }}
+          WEBHOOK_NAME: "Origins DB"
+          EMBED_COLOR: "C99700"
+        run: |
+          python sync.py
+
+      - name: Commit state
+        run: |
+          if git status --porcelain | grep -q .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/state.json
+            git commit -m "Mise à jour automatique (state)"
+            git push
+          else
+            echo "Aucun changement."
+          fi
