@@ -1,10 +1,13 @@
 from __future__ import annotations
+
 import json
 import re
 import time
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple
+
 import requests
+
 
 def _parse_webhook(url: str) -> tuple[str, str]:
     m = re.search(r"/webhooks/(\d+)/([^/?]+)", url)
@@ -12,10 +15,12 @@ def _parse_webhook(url: str) -> tuple[str, str]:
         raise ValueError("Webhook Discord invalide.")
     return m.group(1), m.group(2)
 
+
 @dataclass
 class DiscordMessage:
     embeds: list[dict[str, Any]]
     files: list[tuple[str, bytes]]  # (filename, bytes)
+
 
 class DiscordWebhook:
     def __init__(self, webhook_url: str, username: str) -> None:
@@ -84,17 +89,15 @@ class DiscordWebhook:
 
         js = r.json()
         msg_id = js["id"]
+
+        # Discord renvoie le "channel_id" = l’ID du thread créé (le post forum)
         thread_id = js.get("channel_id") or ""
         if not thread_id:
             raise RuntimeError("Création post forum: thread_id introuvable (channel_id manquant).")
         return msg_id, thread_id
 
-    def edit(self, message_id: str, message: DiscordMessage, *, thread_id: str | None = None) -> None:
+    def edit(self, message_id: str, message: DiscordMessage) -> None:
         url = f"https://discord.com/api/webhooks/{self.webhook_id}/{self.webhook_token}/messages/{message_id}"
-        params: dict[str, Any] = {}
-        if thread_id:
-            params["thread_id"] = thread_id
-
         data: dict[str, Any] = {
             "username": self.username,
             "allowed_mentions": {"parse": []},
@@ -102,22 +105,20 @@ class DiscordWebhook:
         }
 
         if message.files:
+            # Remplacement simple des pièces jointes : on indique qu'on ne garde rien
             data["attachments"] = []
             files = {
                 f"files[{i}]": (name, content, "application/octet-stream")
                 for i, (name, content) in enumerate(message.files)
             }
             payload = {"payload_json": (None, json.dumps(data), "application/json")}
-            self._request("PATCH", url, params=params, files={**payload, **files})
+            self._request("PATCH", url, files={**payload, **files})
         else:
-            self._request("PATCH", url, params=params, json=data)
+            self._request("PATCH", url, json=data)
 
-    def delete(self, message_id: str, *, thread_id: str | None = None) -> None:
+    def delete(self, message_id: str) -> None:
         url = f"https://discord.com/api/webhooks/{self.webhook_id}/{self.webhook_token}/messages/{message_id}"
-        params: dict[str, Any] = {}
-        if thread_id:
-            params["thread_id"] = thread_id
-        self._request("DELETE", url, params=params)
+        self._request("DELETE", url)
 
     def create_message_set(self, messages: list[DiscordMessage], *, thread_id: str | None = None) -> list[str]:
         ids: list[str] = []
@@ -125,17 +126,28 @@ class DiscordWebhook:
             ids.append(self.send(msg, thread_id=thread_id))
         return ids
 
-    def upsert_message_set(self, existing_ids: list[str], messages: list[DiscordMessage], *, thread_id: str | None = None) -> list[str]:
+    def upsert_message_set(
+        self,
+        existing_ids: list[str],
+        messages: list[DiscordMessage],
+        *,
+        thread_id: str | None = None,
+    ) -> list[str]:
         new_ids: list[str] = []
+
         for i, msg in enumerate(messages):
             if i < len(existing_ids):
-                self.edit(existing_ids[i], msg, thread_id=thread_id)
+                self.edit(existing_ids[i], msg)
                 new_ids.append(existing_ids[i])
             else:
                 new_ids.append(self.send(msg, thread_id=thread_id))
+
+        # supprime les anciens messages en trop
         for j in range(len(messages), len(existing_ids)):
-            self.delete(existing_ids[j], thread_id=thread_id)
+            self.delete(existing_ids[j])
+
         return new_ids
+
 
 class WebhookRouter:
     def __init__(self, webhooks: dict[str, str], username: str) -> None:

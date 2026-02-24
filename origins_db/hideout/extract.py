@@ -12,7 +12,6 @@ from origins_db.config import Settings
 
 TAB_LABELS_CHARACTER = ["Basic Info", "Weapons", "Armor", "Potentials"]
 
-# Libellés connus sur la page Armes
 CARD_LABEL_FR: dict[str, str] = {
     "Passive": "Passif",
     "Normal Attack": "Attaque normale",
@@ -21,17 +20,21 @@ CARD_LABEL_FR: dict[str, str] = {
     "Attack Skill": "Compétence d’attaque",
 }
 
+
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+
 def _clean(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
+
 
 def _slugify(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "_", s)
     s = re.sub(r"_+", "_", s).strip("_")
     return s
+
 
 def _normalize_img(src: str) -> str:
     if not src:
@@ -42,50 +45,46 @@ def _normalize_img(src: str) -> str:
         return "https://hideoutgacha.com" + src
     return src
 
+
 def _pick_title(soup: BeautifulSoup) -> str:
     h1 = soup.find("h1")
     return _clean(h1.get_text(" ", strip=True)) if h1 else "Sans titre"
 
+
 def _pick_hero_image(soup: BeautifulSoup, title_hint: str | None = None) -> str | None:
-    """Choisit une image "portrait" plausible.
-
-    Heuristique : privilégie les images dans <main>, avec alt proche du titre,
-    ou dont l'URL contient des segments utiles.
-    """
     title_hint = (title_hint or "").strip().lower()
-
     main = soup.find("main") or soup
-    imgs = main.select("img[src]")
-    if not imgs:
-        imgs = soup.select("img[src]")
+    imgs = main.select("img[src]") or soup.select("img[src]")
 
     best = None
     best_score = -1
+
     for img in imgs:
         src = _normalize_img(img.get("src", ""))
         alt = (img.get("alt") or "").strip().lower()
         score = 0
+
         if title_hint and alt and title_hint in alt:
             score += 5
         if any(x in src.lower() for x in ("character", "characters", "boss", "origin")):
             score += 2
         if any(x in src.lower() for x in ("portrait", "thumb", "icon", "render", "art")):
             score += 1
-        # évite les petites icônes UI
         if any(x in src.lower() for x in ("logo", "favicon", "discord", "kofi")):
             score -= 5
+
         if score > best_score:
             best_score = score
             best = src
 
     return best if best_score >= 0 else None
 
+
 def _find_clickable_by_text(page, label: str):
-    # texte exact ou partiel
     return page.locator(f"text={label}").first
 
+
 def _close_cookie_banner(page) -> None:
-    # évite que le bandeau masque des blocs
     for txt in ("Accept", "J'accepte", "Accepter"):
         try:
             loc = page.locator(f"text={txt}").first
@@ -96,17 +95,22 @@ def _close_cookie_banner(page) -> None:
         except Exception:
             pass
 
+
 def _main_inner_text(page) -> str:
+    # IMPORTANT : on garde les retours à la ligne (sinon impossible de parser les cartes)
     try:
         main = page.locator("main").first
         if main.count() > 0:
-            return _clean(main.inner_text())
+            return main.inner_text()
     except Exception:
         pass
-    return _clean(page.inner_text())
+    try:
+        return page.inner_text()
+    except Exception:
+        return ""
+
 
 def _main_screenshot_bytes(page) -> bytes | None:
-    # uniquement en fallback (si extraction textuelle échoue)
     try:
         main = page.locator("main").first
         if main.count() == 0:
@@ -114,6 +118,16 @@ def _main_screenshot_bytes(page) -> bytes | None:
         return main.screenshot(type="jpeg", quality=70)
     except Exception:
         return None
+
+
+def _lines(text: str) -> list[str]:
+    out: list[str] = []
+    for ln in (text or "").splitlines():
+        ln = _clean(ln)
+        if ln:
+            out.append(ln)
+    return out
+
 
 # ----------------------------
 # Extraction via __NEXT_DATA__
@@ -129,6 +143,7 @@ def _parse_next_data(html: str) -> dict | None:
         return None
     return None
 
+
 def _iter_dicts(obj):
     if isinstance(obj, dict):
         yield obj
@@ -138,12 +153,14 @@ def _iter_dicts(obj):
         for x in obj:
             yield from _iter_dicts(x)
 
+
 def _pick_first_str(d: dict, keys: tuple[str, ...]) -> str | None:
     for k in keys:
         v = d.get(k)
         if isinstance(v, str) and v.strip():
             return v.strip()
     return None
+
 
 def _find_best_payload(next_data: dict, scorer) -> dict | None:
     best = None
@@ -155,26 +172,23 @@ def _find_best_payload(next_data: dict, scorer) -> dict | None:
             best = d
     return best if best_score > 0 else None
 
+
 def _score_character(d: dict) -> int:
     score = 0
-    # nom
     if isinstance(d.get("name"), str) or isinstance(d.get("title"), str):
         score += 1
-    # armes
     for k, v in d.items():
-        if isinstance(k, str) and "weapon" in k.lower() and isinstance(v, list) and v and all(isinstance(x, dict) for x in v[:2]):
+        if isinstance(k, str) and "weapon" in k.lower() and isinstance(v, list) and v and all(isinstance(x, dict) for x in v[:1]):
             score += 4
-    # potentiels / armure
     for key in d.keys():
         if isinstance(key, str) and "potential" in key.lower():
             score += 2
         if isinstance(key, str) and "armor" in key.lower():
             score += 1
-    # stats
-    for key in d.keys():
         if isinstance(key, str) and "stat" in key.lower():
             score += 1
     return score
+
 
 def _score_boss(d: dict) -> int:
     score = 0
@@ -183,10 +197,10 @@ def _score_boss(d: dict) -> int:
     for key, v in d.items():
         if isinstance(key, str) and key.lower() in ("overview", "mechanics", "strategy", "tips") and isinstance(v, (str, list, dict)):
             score += 2
-    # gros bloc texte
     if any(isinstance(v, str) and len(v) > 250 for v in d.values()):
         score += 1
     return score
+
 
 def _as_kv_list(stats_obj) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
@@ -201,12 +215,11 @@ def _as_kv_list(stats_obj) -> list[tuple[str, str]]:
                 v = it.get("value") if "value" in it else _pick_first_str(it, ("val", "amount"))
                 if k and v is not None:
                     out.append((_clean(k), _clean(str(v))))
-    # filtrage minimal
     out = [(k, v) for k, v in out if k and v and len(k) <= 32]
     return out
 
+
 def _collect_cards(obj, default_label: str | None = None) -> list[dict]:
-    """Récupère des 'cartes' (nom + description) dans une structure JSON."""
     cards: list[dict] = []
 
     def walk(o, label: str | None):
@@ -229,7 +242,6 @@ def _collect_cards(obj, default_label: str | None = None) -> list[dict]:
 
     walk(obj, default_label)
 
-    # dédoublonnage simple
     seen = set()
     uniq: list[dict] = []
     for c in cards:
@@ -240,18 +252,18 @@ def _collect_cards(obj, default_label: str | None = None) -> list[dict]:
         uniq.append(c)
     return uniq
 
+
 def _label_to_fr(label: str, settings: Settings) -> str:
     l = _clean(label)
     if not l:
         return ""
     if l in CARD_LABEL_FR:
         return CARD_LABEL_FR[l]
-    # camelCase -> mots
     l2 = re.sub(r"([a-z])([A-Z])", r"\1 \2", l)
     l2 = l2.replace("_", " ")
     l2 = _clean(l2)
-    # traduction courte
     return translate_en_fr(l2, settings.keep_terms)
+
 
 def _extract_character_from_next(next_data: dict, title_fallback: str, settings: Settings) -> tuple[str | None, list[Section]]:
     payload = _find_best_payload(next_data, _score_character)
@@ -260,12 +272,10 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
 
     name = _pick_first_str(payload, ("name", "title")) or title_fallback
 
-    # image
     hero = _pick_first_str(payload, ("image", "portrait", "thumbnail", "icon", "art", "render"))
     if hero:
         hero = _normalize_img(hero)
 
-    # stats
     stats_obj = None
     for k, v in payload.items():
         if isinstance(k, str) and "stat" in k.lower():
@@ -273,7 +283,6 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
             break
     stats_kv = _as_kv_list(stats_obj) if stats_obj is not None else []
 
-    # weapons list
     weapons_list = None
     for k, v in payload.items():
         if isinstance(k, str) and "weapon" in k.lower() and isinstance(v, list) and v and all(isinstance(x, dict) for x in v[:1]):
@@ -282,14 +291,12 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
 
     sections: list[Section] = []
 
-    # Profil
     prof_blocks: list[dict] = []
     if stats_kv:
         prof_blocks.append({"type": "kv", "title": "Stats", "items": [{"k": k, "v": v} for k, v in stats_kv]})
 
-    # infos simples éventuelles
     info_keys = [
-        ("Element", ("element", "attribute")),
+        ("Élément", ("element", "attribute")),
         ("Rôle", ("role", "class", "archetype")),
         ("Rareté", ("rarity",)),
     ]
@@ -308,14 +315,12 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
     if prof_blocks:
         sections.append(Section(title="Profil", blocks=prof_blocks, images=[]))
 
-    # Armes
     if weapons_list:
         for w in weapons_list[:8]:
             wname = _pick_first_str(w, ("name", "title")) or "Arme"
             welem = _pick_first_str(w, ("element", "attribute", "type"))
             cards = _collect_cards(w)
 
-            # nettoyage / tri : regrouper par label connu quand possible
             norm_cards: list[dict] = []
             for c in cards:
                 label = c.get("label") or ""
@@ -338,7 +343,6 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
 
             sections.append(Section(title=f"Arme : {wname}", blocks=blocks, images=[]))
 
-    # Potentiels
     pot_list = None
     for k, v in payload.items():
         if isinstance(k, str) and "potential" in k.lower() and isinstance(v, list):
@@ -346,7 +350,7 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
             break
     if pot_list:
         items = []
-        for p in pot_list[:120]:
+        for p in pot_list[:160]:
             if isinstance(p, str):
                 items.append(translate_en_fr(_clean(p), settings.keep_terms))
             elif isinstance(p, dict):
@@ -359,7 +363,6 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
         if items:
             sections.append(Section(title="Potentiels", blocks=[{"type": "list", "items": items}], images=[]))
 
-    # Armure
     armor_list = None
     for k, v in payload.items():
         if isinstance(k, str) and "armor" in k.lower() and isinstance(v, list):
@@ -367,7 +370,7 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
             break
     if armor_list:
         items = []
-        for a in armor_list[:120]:
+        for a in armor_list[:160]:
             if isinstance(a, str):
                 items.append(translate_en_fr(_clean(a), settings.keep_terms))
             elif isinstance(a, dict):
@@ -382,6 +385,7 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
 
     return hero, sections
 
+
 # ----------------------------
 # Boss via __NEXT_DATA__
 # ----------------------------
@@ -390,11 +394,13 @@ def _value_to_blocks(val, settings: Settings) -> list[dict]:
     blocks: list[dict] = []
     if val is None:
         return blocks
+
     if isinstance(val, str):
         t = _clean(val)
         if t:
             blocks.append({"type": "text", "text": translate_en_fr(t, settings.keep_terms)})
         return blocks
+
     if isinstance(val, list):
         items: list[str] = []
         for it in val:
@@ -412,14 +418,14 @@ def _value_to_blocks(val, settings: Settings) -> list[dict]:
         if items:
             blocks.append({"type": "list", "items": items})
         return blocks
+
     if isinstance(val, dict):
-        # tente d'extraire du texte et des listes
         text_bits: list[str] = []
         list_bits: list[str] = []
         for k, v in val.items():
-            if isinstance(v, str) and len(v.strip()) > 0:
+            if isinstance(v, str) and v.strip():
                 key = _clean(str(k))
-                if key and key.lower() not in ("id", "slug", "image", "icon"): 
+                if key and key.lower() not in ("id", "slug", "image", "icon"):
                     text_bits.append(f"**{translate_en_fr(key, settings.keep_terms)}** : {translate_en_fr(_clean(v), settings.keep_terms)}")
                 else:
                     text_bits.append(translate_en_fr(_clean(v), settings.keep_terms))
@@ -432,12 +438,15 @@ def _value_to_blocks(val, settings: Settings) -> list[dict]:
         if text_bits:
             blocks.append({"type": "text", "text": "\n".join(text_bits)})
         return blocks
+
     return blocks
+
 
 def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings) -> tuple[str | None, list[Section]]:
     want = (boss_label or "").strip().lower()
     best = None
     best_score = -1
+
     for d in _iter_dicts(next_data):
         nm = _pick_first_str(d, ("name", "title"))
         if not nm:
@@ -448,6 +457,7 @@ def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings
         if s > best_score:
             best_score = s
             best = d
+
     if not best:
         return None, []
 
@@ -471,7 +481,6 @@ def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings
             if blocks:
                 sections.append(Section(title=title_fr, blocks=blocks, images=[]))
 
-    # si rien n'a matché : fallback sur les gros textes du payload
     if not sections:
         big = []
         for v in best.values():
@@ -481,6 +490,11 @@ def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings
             sections.append(Section(title="Résumé", blocks=[{"type": "text", "text": "\n\n".join(big[:3])}], images=[]))
 
     return hero, sections
+
+
+# ----------------------------
+# Sections génériques (combat / infos générales / boss index)
+# ----------------------------
 
 def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[Section]:
     soup = BeautifulSoup(html, "lxml")
@@ -525,19 +539,19 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
         cur_paras = []
         cur_bullets = []
 
-    # Intro si texte avant le 1er titre
-    intro: list[str] = []
+    # Intro (texte avant le 1er titre)
+    intro_parts: list[str] = []
     for node in main.find_all(["h2", "h3", "h4", "p"], recursive=True):
         if node.name in ("h2", "h3", "h4"):
             break
         if node.name == "p":
             t = _clean(node.get_text(" ", strip=True))
             if t:
-                intro.append(t)
-    if intro:
+                intro_parts.append(t)
+    if intro_parts:
         sections.append(Section(
             title="Introduction",
-            blocks=[{"type": "text", "text": translate_en_fr(" ".join(intro), settings.keep_terms)}],
+            blocks=[{"type": "text", "text": translate_en_fr(" ".join(intro_parts), settings.keep_terms)}],
             images=[]
         ))
 
@@ -562,16 +576,18 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
 
     flush()
 
-    # Fallback ultime
+    # Fallback ultime si vraiment vide
     if not sections:
-        text = _clean(main.get_text(" ", strip=True))
+        text = _clean((main).get_text(" ", strip=True))
         if text:
             sections.append(Section(
                 title="Résumé",
                 blocks=[{"type": "text", "text": translate_en_fr(text, settings.keep_terms)}],
                 images=[]
             ))
+
     return sections
+
 
 # ----------------------------
 # Point d'entrée
@@ -585,8 +601,6 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
     soup = BeautifulSoup(html_full, "lxml")
 
     title = _pick_title(soup)
-
-    # hero image : tentative via HTML (améliorée) + possible override via next-data
     hero_img = _pick_hero_image(soup, title_hint=title)
 
     sections: list[Section] = []
@@ -596,7 +610,6 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
     next_data = _parse_next_data(html_full)
 
     if target.kind == "character":
-        # extraction structurée (priorité)
         if next_data:
             hero_nd, sections_nd = _extract_character_from_next(next_data, title, settings)
             if sections_nd:
@@ -604,9 +617,9 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             if hero_nd:
                 hero_img = hero_nd
 
-        # fallback DOM : on tente de récupérer au moins l'onglet Armes + Stats
+        # Fallback DOM (si NEXT_DATA ne donne rien)
         if not sections:
-            # Stats (Basic Info)
+            # Basic Info
             try:
                 loc = _find_clickable_by_text(page, "Basic Info")
                 if loc.count() > 0:
@@ -616,35 +629,45 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
                 pass
 
             basic_text = _main_inner_text(page)
-            stats_lines: list[str] = []
-            # heuristique "Stat 123" par regex
-            # extraction plus simple par regex
-            for m in re.finditer(r"\b([A-Za-z][A-Za-z \-]{1,24})\s*([0-9][0-9,\.]{1,})\b", basic_text):
-                k = _clean(m.group(1))
-                v = m.group(2)
-                if k.lower() in ("home", "games", "about", "accept"):
-                    continue
-                if any(x in k.lower() for x in ("cookie", "privacy")):
-                    continue
-                stats_lines.append(f"**{translate_en_fr(k, settings.keep_terms)}** : {v}")
-            if stats_lines:
-                sections.append(Section(title="Profil", blocks=[{"type": "text", "text": "\n".join(stats_lines[:25])}], images=[]))
+            basic_lines = _lines(basic_text)
 
-            # Armes
+            # Stats : ligne "Stat 1234" (plus tolérant)
+            stats_pairs: list[tuple[str, str]] = []
+            for ln in basic_lines:
+                if len(ln) > 48:
+                    continue
+                if any(x in ln.lower() for x in ("cookie", "privacy", "home", "games", "about", "accept")):
+                    continue
+                m = re.match(r"^([A-Za-z][A-Za-z \-]{1,24})\s+([0-9][0-9,\.]{1,})$", ln)
+                if not m:
+                    continue
+                k = _clean(m.group(1))
+                v = _clean(m.group(2))
+                stats_pairs.append((translate_en_fr(k, settings.keep_terms), v))
+
+            if stats_pairs:
+                sections.append(Section(
+                    title="Profil",
+                    blocks=[{"type": "kv", "title": "Stats", "items": [{"k": k, "v": v} for k, v in stats_pairs[:40]}],
+                    images=[]
+                ))
+
+            # Weapons tab
             try:
                 loc = _find_clickable_by_text(page, "Weapons")
                 if loc.count() > 0:
                     loc.click(timeout=10_000)
-                    page.wait_for_timeout(500)
+                    page.wait_for_timeout(600)
             except Exception:
                 pass
 
-            # découvre des boutons "arme" (courts, hors onglets)
+            # Détecter les boutons d'armes (pas seulement <button>)
             weapon_buttons = []
             try:
                 cands = page.locator(
-    "main button, main [role=button], main a, main [tabindex='0'], main div[tabindex='0']"
-).all()
+                    "main button, main [role=button], main a, main [tabindex='0'], main div[tabindex='0']"
+                ).all()
+
                 for el in cands:
                     try:
                         txt = _clean(el.inner_text())
@@ -656,7 +679,6 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
                         continue
                     if txt.lower() in ("accept",):
                         continue
-                    # très probable : armes
                     weapon_buttons.append((txt, el))
             except Exception:
                 weapon_buttons = []
@@ -666,34 +688,41 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
                 if wname in seen:
                     continue
                 seen.add(wname)
+
                 try:
                     el.click(timeout=5000)
-                    page.wait_for_timeout(350)
+                    page.wait_for_timeout(450)
                 except Exception:
                     pass
 
-                t = _main_inner_text(page)
-# on coupe tout ce qui est avant la 1ère carte (Passive / Normal Attack / etc.)
-labels = list(CARD_LABEL_FR.keys())
-start_idx = next((idx for idx, tok in enumerate(toks) if tok in labels), None)
-if start_idx is not None:
-    toks = toks[start_idx:]
-                # parse cartes via marqueurs connus
+                t_raw = _main_inner_text(page)
+                toks = _lines(t_raw)
+
                 labels = list(CARD_LABEL_FR.keys())
-                toks = [x for x in re.split(r"\n+", t) if _clean(x)]
+
+                # Commence à la première carte (évite le bruit)
+                start_idx = None
+                for idx, tok in enumerate(toks):
+                    if tok in labels:
+                        start_idx = idx
+                        break
+                if start_idx is not None:
+                    toks = toks[start_idx:]
+
                 cards = []
                 i = 0
                 while i < len(toks):
                     cur = toks[i]
                     if cur in labels:
                         label = cur
-                        name_line = toks[i+1] if i+1 < len(toks) else ""
+                        name_line = toks[i + 1] if i + 1 < len(toks) else ""
                         desc_parts = []
                         j = i + 2
                         while j < len(toks) and toks[j] not in labels:
                             desc_parts.append(toks[j])
                             j += 1
                         desc_en = _clean(" ".join(desc_parts))
+
                         cards.append({
                             "label": _label_to_fr(label, settings),
                             "name": _clean(name_line),
@@ -709,6 +738,48 @@ if start_idx is not None:
                         blocks=[{"type": "cards", "cards": cards}],
                         images=[]
                     ))
+
+            # Potentials tab (fallback simple)
+            try:
+                loc = _find_clickable_by_text(page, "Potentials")
+                if loc.count() > 0:
+                    loc.click(timeout=10_000)
+                    page.wait_for_timeout(600)
+                    pot_lines = _lines(_main_inner_text(page))
+                    pot_items = []
+                    for ln in pot_lines:
+                        if ln in TAB_LABELS_CHARACTER:
+                            continue
+                        if len(ln) < 10:
+                            continue
+                        if any(x in ln.lower() for x in ("cookie", "privacy", "accept")):
+                            continue
+                        pot_items.append(translate_en_fr(ln, settings.keep_terms))
+                    if pot_items:
+                        sections.append(Section(title="Potentiels", blocks=[{"type": "list", "items": pot_items[:80]}], images=[]))
+            except Exception:
+                pass
+
+            # Armor tab (fallback simple)
+            try:
+                loc = _find_clickable_by_text(page, "Armor")
+                if loc.count() > 0:
+                    loc.click(timeout=10_000)
+                    page.wait_for_timeout(600)
+                    ar_lines = _lines(_main_inner_text(page))
+                    ar_items = []
+                    for ln in ar_lines:
+                        if ln in TAB_LABELS_CHARACTER:
+                            continue
+                        if len(ln) < 10:
+                            continue
+                        if any(x in ln.lower() for x in ("cookie", "privacy", "accept")):
+                            continue
+                        ar_items.append(translate_en_fr(ln, settings.keep_terms))
+                    if ar_items:
+                        sections.append(Section(title="Armure", blocks=[{"type": "list", "items": ar_items[:80]}], images=[]))
+            except Exception:
+                pass
 
         channel_key = "personnages"
         entity_id = f"character:{target.url.rsplit('/', 1)[-1].lower()}"
@@ -727,12 +798,11 @@ if start_idx is not None:
         out_title = "Infos générales"
 
     elif target.kind == "boss_index":
-        # onglet "Information"
         try:
             loc = _find_clickable_by_text(page, "Information")
             if loc.count() > 0:
                 loc.click(timeout=10_000)
-                page.wait_for_timeout(500)
+                page.wait_for_timeout(600)
         except Exception:
             pass
 
@@ -747,7 +817,7 @@ if start_idx is not None:
             loc = _find_clickable_by_text(page, label)
             if loc.count() > 0:
                 loc.click(timeout=10_000)
-                page.wait_for_timeout(600)
+                page.wait_for_timeout(700)
         except Exception:
             pass
 
@@ -773,7 +843,7 @@ if start_idx is not None:
     else:
         return None
 
-    # fallback ultime : si rien n'est extrait, on joint une capture pour éviter un message vide
+    # fallback ultime si vraiment rien n'est extrait
     if not sections:
         header_shot = _main_screenshot_bytes(page)
         header_name = "fallback.jpg" if header_shot else None

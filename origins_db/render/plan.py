@@ -8,10 +8,12 @@ from origins_db.hideout.model import Entity, Section
 from origins_db.render.text import chunk_for_discord
 from origins_db.config import Settings
 
+
 @dataclass
 class MessagePlan:
     channel_key: str
     messages: list[DiscordMessage]
+
 
 def _embed_base(title: str, url: str, color: int, thumbnail_url: str | None = None) -> dict[str, Any]:
     e: dict[str, Any] = {
@@ -24,6 +26,7 @@ def _embed_base(title: str, url: str, color: int, thumbnail_url: str | None = No
         e["thumbnail"] = {"url": thumbnail_url}
     return e
 
+
 def _kv_to_lines(items: list[dict[str, str]]) -> str:
     lines: list[str] = []
     for it in items:
@@ -33,8 +36,9 @@ def _kv_to_lines(items: list[dict[str, str]]) -> str:
             lines.append(f"• **{k}** : {v}")
     return "\n".join(lines)
 
+
 def _cards_to_fields(cards: list[dict[str, str]]) -> list[dict[str, Any]]:
-    """Regroupe des cartes par label pour éviter l'effet pavé."""
+    # Regroupe par label (Passif / Attaque normale / etc.)
     groups: dict[str, list[dict[str, str]]] = {}
     for c in cards:
         label = (c.get("label") or "Compétence").strip() or "Compétence"
@@ -50,10 +54,13 @@ def _cards_to_fields(cards: list[dict[str, str]]) -> list[dict[str, Any]]:
                 parts.append(f"**{nm}**\n{desc}")
             elif desc:
                 parts.append(desc)
+
         value = "\n\n".join(parts).strip()
         for chunk in chunk_for_discord(value, 1000):
             fields.append({"name": label[:256], "value": chunk, "inline": False})
+
     return fields[:25]
+
 
 def section_to_text(sec: Section) -> str:
     out: list[str] = []
@@ -65,6 +72,7 @@ def section_to_text(sec: Section) -> str:
         elif b["type"] == "kv":
             out.append(_kv_to_lines(b.get("items", [])))
     return "\n\n".join([x for x in out if x.strip()]).strip()
+
 
 def _blocks_to_desc_fields(blocks: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
     desc_parts: list[str] = []
@@ -91,27 +99,35 @@ def _blocks_to_desc_fields(blocks: list[dict[str, Any]]) -> tuple[str, list[dict
                 for chunk in chunk_for_discord(val, 1000):
                     fields.append({"name": sec.title[:256], "value": chunk, "inline": False})
 
-    desc = "\n\n".join(chunk_for_discord("\n\n".join(desc_parts), 3800))[:4096]
+    desc_joined = "\n\n".join(desc_parts).strip()
+    desc = "\n\n".join(chunk_for_discord(desc_joined, 3800))[:4096]
     return desc, fields[:25]
+
 
 def build_message_plan(entity: Entity, settings: Settings) -> MessagePlan:
     embeds: list[dict[str, Any]] = []
 
-    # Header : pas de gros screenshot par défaut. L'image du boss/personnage doit être lisible.
     header = _embed_base(entity.title, entity.url, settings.embed_color, thumbnail_url=entity.hero_image)
-    
-    # Image en grand (perso/boss) si dispo
-if entity.hero_image and entity.kind in ("character", "boss_tab"):
-    header["image"] = {"url": entity.hero_image}
+
+    # Image “en supplément” : on l’affiche en grand dans l’embed d’en-tête
+    if entity.hero_image and not (entity.header_attachment_name and entity.header_attachment_bytes):
+        header["image"] = {"url": entity.hero_image}
 
     if entity.kind == "character":
-        header["description"] = "Fiche du personnage (stats + armes + potentiels)."
-    elif entity.kind in ("boss_tab", "boss_index"):
-        header["description"] = "Infos de boss structurées (résumé + mécaniques + conseils)."
+        header["description"] = (
+            "Tout est ici : **stats**, **armes** et **compétences**, **potentiels**.\n"
+            "Si tu veux vérifier un détail, clique le titre pour ouvrir la source."
+        )
+    elif entity.kind == "boss_tab":
+        header["description"] = (
+            "Guide boss : **résumé**, **mécaniques**, **stratégie** et **conseils**.\n"
+            "Clique le titre si tu veux la page source."
+        )
+    elif entity.kind == "boss_index":
+        header["description"] = "Infos générales sur les boss (source cliquable via le titre)."
     else:
-        header["description"] = "Guide structuré à partir de la page source."
+        header["description"] = "Guide structuré en français (source cliquable via le titre)."
 
-    # Fallback capture uniquement si l'extraction échoue (jointe au 1er message)
     files_first: list[tuple[str, bytes]] = []
     if entity.header_attachment_name and entity.header_attachment_bytes:
         files_first.append((entity.header_attachment_name, entity.header_attachment_bytes))
@@ -134,7 +150,7 @@ if entity.hero_image and entity.kind in ("character", "boss_tab"):
     i = 0
     msg_index = 0
     while i < len(embeds):
-        chunk = embeds[i:i+10]
+        chunk = embeds[i:i + 10]
         files = files_first if msg_index == 0 else []
         messages.append(DiscordMessage(embeds=chunk, files=files))
         i += 10

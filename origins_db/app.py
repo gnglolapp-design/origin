@@ -6,6 +6,7 @@ from origins_db.render.plan import build_message_plan
 from origins_db.state import StateStore
 from origins_db.discord.webhook import WebhookRouter
 
+
 def run() -> None:
     settings = Settings.from_env()
 
@@ -17,6 +18,7 @@ def run() -> None:
 
     try:
         targets = discover_all(render, settings.base_url)
+
         for target in targets:
             entity = extract_entity(render, target, settings)
             if entity is None:
@@ -24,19 +26,23 @@ def run() -> None:
 
             prev = store.get(entity.entity_id)
             if prev and prev.get("hash") == entity.content_hash:
-                continue
+                continue  # pas de changement
 
             plan = build_message_plan(entity, settings)
 
+            # Mode "Forum" pour les personnages si le webhook existe
             use_forum = (entity.kind == "character") and ("personnages_forum" in settings.webhooks)
-            channel_key = "personnages_forum" if use_forum else plan.channel_key
 
+            channel_key = "personnages_forum" if use_forum else plan.channel_key
             wh = router.get(channel_key)
+
+            # fallback boss sans salon dédié
             if wh is None:
                 wh = router.get("boss_infos")
                 channel_key = "boss_infos"
+
             if wh is None:
-                raise RuntimeError("Aucun webhook valide trouvé (boss_infos manquant).")
+                raise RuntimeError("Webhook manquant : boss_infos doit exister.")
 
             thread_id = None
 
@@ -46,12 +52,14 @@ def run() -> None:
                 if thread_id and prev and prev.get("messages"):
                     new_ids = wh.upsert_message_set(prev["messages"], plan.messages, thread_id=thread_id)
                 else:
+                    # Crée le post (thread) avec le 1er message
                     first_id, created_thread_id = wh.send_forum_post(entity.title, plan.messages[0])
                     rest_ids = [wh.send(m, thread_id=created_thread_id) for m in plan.messages[1:]]
                     new_ids = [first_id] + rest_ids
                     thread_id = created_thread_id
 
-                # nettoyage: si avant c’était publié ailleurs, tenter suppression (si webhook dispo)
+                # Migration : si avant c'était dans un autre salon (ex: ancien #personnages texte),
+                # on tente de supprimer les anciens messages si le webhook de l'ancien salon existe.
                 if prev and prev.get("channel") and prev.get("channel") != channel_key:
                     old_wh = router.get(prev["channel"])
                     if old_wh and prev.get("messages"):
@@ -60,7 +68,6 @@ def run() -> None:
                                 old_wh.delete(mid)
                             except Exception:
                                 pass
-
             else:
                 if prev and prev.get("messages"):
                     new_ids = wh.upsert_message_set(prev["messages"], plan.messages)
