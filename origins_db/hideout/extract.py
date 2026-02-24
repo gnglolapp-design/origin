@@ -601,7 +601,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
     soup = BeautifulSoup(html_full, "lxml")
 
     title = _pick_title(soup)
-out_url = target.url
+    out_url = target.url
     hero_img = _pick_hero_image(soup, title_hint=title)
 
     sections: list[Section] = []
