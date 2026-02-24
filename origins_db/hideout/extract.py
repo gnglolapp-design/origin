@@ -484,55 +484,83 @@ def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings
 
 def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[Section]:
     soup = BeautifulSoup(html, "lxml")
-    roots = soup.select("main h2, main h3, main h4, h2, h3, h4")
+    main = soup.find("main") or soup
+
     sections: list[Section] = []
 
-    for h in roots:
-        title_en = _clean(h.get_text(" ", strip=True))
-        if not title_en:
+    cur_title: str | None = None
+    cur_paras: list[str] = []
+    cur_bullets: list[str] = []
+
+    def flush():
+        nonlocal cur_title, cur_paras, cur_bullets
+        if not cur_title:
+            return
+        blocks: list[dict] = []
+
+        if cur_paras:
+            txt = " ".join([_clean(x) for x in cur_paras if _clean(x)])
+            txt = translate_en_fr(txt, settings.keep_terms)
+            if txt:
+                blocks.append({"type": "text", "text": txt})
+
+        if cur_bullets:
+            items = []
+            for b in cur_bullets:
+                b = _clean(b).lstrip("•").strip()
+                if b:
+                    items.append(translate_en_fr(b, settings.keep_terms))
+            if items:
+                blocks.append({"type": "list", "items": items[:200]})
+
+        if blocks:
+            sections.append(Section(title=translate_en_fr(_clean(cur_title), settings.keep_terms), blocks=blocks, images=[]))
+
+        cur_title = None
+        cur_paras = []
+        cur_bullets = []
+
+    # texte d’intro avant le 1er titre
+    intro_parts: list[str] = []
+    for node in main.find_all(["h2", "h3", "h4", "p"], recursive=True):
+        if node.name in ("h2", "h3", "h4"):
+            break
+        if node.name == "p":
+            t = _clean(node.get_text(" ", strip=True))
+            if t:
+                intro_parts.append(t)
+    if intro_parts:
+        sections.append(Section(
+            title="Introduction",
+            blocks=[{"type": "text", "text": translate_en_fr(" ".join(intro_parts), settings.keep_terms)}],
+            images=[]
+        ))
+
+    # parcours en ordre des titres + contenu
+    for node in main.find_all(["h2", "h3", "h4", "p", "li"], recursive=True):
+        if node.name in ("h2", "h3", "h4"):
+            flush()
+            cur_title = _clean(node.get_text(" ", strip=True))
             continue
 
-        blocks = []
-        images: list[str] = []
-        cur = h.next_sibling
-        texts: list[str] = []
-        bullets: list[str] = []
-
-        while cur is not None:
-            if isinstance(cur, Tag) and cur.name in ("h2", "h3", "h4"):
-                break
-            if isinstance(cur, Tag):
-                for img in cur.select("img[src]"):
-                    images.append(_normalize_img(img["src"]))
-
-                for li in cur.select("li"):
-                    t = _clean(li.get_text(" ", strip=True))
-                    if t:
-                        bullets.append(t)
-
-                for p in cur.select("p"):
-                    t = _clean(p.get_text(" ", strip=True))
-                    if t:
-                        texts.append(t)
-            cur = cur.next_sibling
-
-        if bullets:
-            fr_bullets = [translate_en_fr(b, settings.keep_terms) for b in bullets[:200]]
-            blocks.append({"type": "list", "items": fr_bullets})
-
-        if texts:
-            joined = " ".join(texts)
-            joined = translate_en_fr(joined, settings.keep_terms)
-            blocks.append({"type": "text", "text": joined})
-
-        if not blocks:
+        if not cur_title:
             continue
 
-        title_fr = translate_en_fr(title_en, settings.keep_terms)
-        sections.append(Section(title=title_fr, blocks=blocks, images=images))
+        if node.name == "p":
+            t = _clean(node.get_text(" ", strip=True))
+            if t:
+                cur_paras.append(t)
 
+        elif node.name == "li":
+            t = _clean(node.get_text(" ", strip=True))
+            if t:
+                cur_bullets.append(t)
+
+    flush()
+
+    # fallback si vraiment vide
     if not sections:
-        text = _clean((soup.find("main") or soup).get_text(" ", strip=True))
+        text = _clean((main).get_text(" ", strip=True))
         if text:
             sections.append(Section(
                 title="Résumé",
