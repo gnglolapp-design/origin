@@ -601,6 +601,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
     soup = BeautifulSoup(html_full, "lxml")
 
     title = _pick_title(soup)
+out_url = target.url
     hero_img = _pick_hero_image(soup, title_hint=title)
 
     sections: list[Section] = []
@@ -836,6 +837,13 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             sections = _extract_sections_generic_from_html(html_now, settings)
 
         slug = _slugify(label)
+        try:
+            if page.url and page.url != target.url:
+                out_url = page.url
+        except Exception:
+            pass
+        if out_url == target.url:
+            out_url = f"{target.url}#{slug}"
         channel_key = slug if slug in settings.webhooks else "boss_infos"
         entity_id = f"boss:{slug}"
         out_title = label
@@ -853,13 +861,13 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             images=[]
         )]
 
-    norm = out_title + "\n" + "\n".join(s.title + ":" + str(s.blocks) for s in sections)
+    norm = out_title + "\n" + out_url + "\n" + "\n".join(s.title + ":" + str(s.blocks) for s in sections)
     content_hash = _sha(norm)
 
     return Entity(
         entity_id=entity_id,
         kind=target.kind,
-        url=target.url,
+        url=out_url,
         title=out_title,
         channel_key=channel_key,
         hero_image=hero_img,

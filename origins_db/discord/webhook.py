@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -50,6 +50,7 @@ class DiscordWebhook:
 
         data = {
             "username": self.username,
+            "thread_name": safe_name,
             "allowed_mentions": {"parse": []},
             "embeds": message.embeds,
         }
@@ -67,12 +68,13 @@ class DiscordWebhook:
         return r.json()["id"]
 
     def send_forum_post(self, thread_name: str, message: DiscordMessage) -> Tuple[str, str]:
-        # Création d’un post (thread) dans un salon Forum via webhook
+        # CrÃ©ation dâ€™un post (thread) dans un salon Forum via webhook
         safe_name = (thread_name or "Post").strip()[:100]
-        params: dict[str, Any] = {"wait": "true", "thread_name": safe_name}
+        params: dict[str, Any] = {"wait": "true"}
 
         data = {
             "username": self.username,
+            "thread_name": safe_name,
             "allowed_mentions": {"parse": []},
             "embeds": message.embeds,
         }
@@ -90,10 +92,10 @@ class DiscordWebhook:
         js = r.json()
         msg_id = js["id"]
 
-        # Discord renvoie le "channel_id" = l’ID du thread créé (le post forum)
+        # Discord renvoie le "channel_id" = lâ€™ID du thread crÃ©Ã© (le post forum)
         thread_id = js.get("channel_id") or ""
         if not thread_id:
-            raise RuntimeError("Création post forum: thread_id introuvable (channel_id manquant).")
+            raise RuntimeError("CrÃ©ation post forum: thread_id introuvable (channel_id manquant).")
         return msg_id, thread_id
 
     def edit(self, message_id: str, message: DiscordMessage) -> None:
@@ -105,7 +107,7 @@ class DiscordWebhook:
         }
 
         if message.files:
-            # Remplacement simple des pièces jointes : on indique qu'on ne garde rien
+            # Remplacement simple des piÃ¨ces jointes : on indique qu'on ne garde rien
             data["attachments"] = []
             files = {
                 f"files[{i}]": (name, content, "application/octet-stream")
