@@ -99,6 +99,10 @@ def build_message_plan(entity: Entity, settings: Settings) -> MessagePlan:
 
     # Header : pas de gros screenshot par défaut. L'image du boss/personnage doit être lisible.
     header = _embed_base(entity.title, entity.url, settings.embed_color, thumbnail_url=entity.hero_image)
+    
+    # Image en grand (perso/boss) si dispo
+if entity.hero_image and entity.kind in ("character", "boss_tab"):
+    header["image"] = {"url": entity.hero_image}
 
     if entity.kind == "character":
         header["description"] = "Fiche du personnage (stats + armes + potentiels)."

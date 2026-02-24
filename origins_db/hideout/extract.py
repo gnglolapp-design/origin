@@ -496,6 +496,7 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
         nonlocal cur_title, cur_paras, cur_bullets
         if not cur_title:
             return
+
         blocks: list[dict] = []
 
         if cur_paras:
@@ -514,29 +515,33 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
                 blocks.append({"type": "list", "items": items[:200]})
 
         if blocks:
-            sections.append(Section(title=translate_en_fr(_clean(cur_title), settings.keep_terms), blocks=blocks, images=[]))
+            sections.append(Section(
+                title=translate_en_fr(_clean(cur_title), settings.keep_terms),
+                blocks=blocks,
+                images=[]
+            ))
 
         cur_title = None
         cur_paras = []
         cur_bullets = []
 
-    # texte d’intro avant le 1er titre
-    intro_parts: list[str] = []
+    # Intro si texte avant le 1er titre
+    intro: list[str] = []
     for node in main.find_all(["h2", "h3", "h4", "p"], recursive=True):
         if node.name in ("h2", "h3", "h4"):
             break
         if node.name == "p":
             t = _clean(node.get_text(" ", strip=True))
             if t:
-                intro_parts.append(t)
-    if intro_parts:
+                intro.append(t)
+    if intro:
         sections.append(Section(
             title="Introduction",
-            blocks=[{"type": "text", "text": translate_en_fr(" ".join(intro_parts), settings.keep_terms)}],
+            blocks=[{"type": "text", "text": translate_en_fr(" ".join(intro), settings.keep_terms)}],
             images=[]
         ))
 
-    # parcours en ordre des titres + contenu
+    # Parcours en ordre
     for node in main.find_all(["h2", "h3", "h4", "p", "li"], recursive=True):
         if node.name in ("h2", "h3", "h4"):
             flush()
@@ -550,7 +555,6 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
             t = _clean(node.get_text(" ", strip=True))
             if t:
                 cur_paras.append(t)
-
         elif node.name == "li":
             t = _clean(node.get_text(" ", strip=True))
             if t:
@@ -558,9 +562,9 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
 
     flush()
 
-    # fallback si vraiment vide
+    # Fallback ultime
     if not sections:
-        text = _clean((main).get_text(" ", strip=True))
+        text = _clean(main.get_text(" ", strip=True))
         if text:
             sections.append(Section(
                 title="Résumé",
@@ -615,7 +619,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             stats_lines: list[str] = []
             # heuristique "Stat 123" par regex
             # extraction plus simple par regex
-            for m in re.finditer(r"\b([A-Za-z][A-Za-z \-]{1,24})\s*(\d{2,7})\b", basic_text):
+            for m in re.finditer(r"\b([A-Za-z][A-Za-z \-]{1,24})\s*([0-9][0-9,\.]{1,})\b", basic_text):
                 k = _clean(m.group(1))
                 v = m.group(2)
                 if k.lower() in ("home", "games", "about", "accept"):
@@ -638,7 +642,9 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             # découvre des boutons "arme" (courts, hors onglets)
             weapon_buttons = []
             try:
-                cands = page.locator("main button, main [role=button]").all()
+                cands = page.locator(
+    "main button, main [role=button], main a, main [tabindex='0'], main div[tabindex='0']"
+).all()
                 for el in cands:
                     try:
                         txt = _clean(el.inner_text())
@@ -667,6 +673,11 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
                     pass
 
                 t = _main_inner_text(page)
+# on coupe tout ce qui est avant la 1ère carte (Passive / Normal Attack / etc.)
+labels = list(CARD_LABEL_FR.keys())
+start_idx = next((idx for idx, tok in enumerate(toks) if tok in labels), None)
+if start_idx is not None:
+    toks = toks[start_idx:]
                 # parse cartes via marqueurs connus
                 labels = list(CARD_LABEL_FR.keys())
                 toks = [x for x in re.split(r"\n+", t) if _clean(x)]
