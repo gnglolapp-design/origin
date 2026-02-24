@@ -3,7 +3,7 @@ import json
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 import requests
 
 def _parse_webhook(url: str) -> tuple[str, str]:
@@ -38,8 +38,11 @@ class DiscordWebhook:
             raise RuntimeError(f"Discord API erreur {r.status_code}: {r.text[:800]}")
         raise RuntimeError("Discord API: trop de 429/erreurs temporaires.")
 
-    def send(self, message: DiscordMessage) -> str:
-        url = self.webhook_url + "?wait=true"
+    def send(self, message: DiscordMessage, *, thread_id: str | None = None) -> str:
+        params: dict[str, Any] = {"wait": "true"}
+        if thread_id:
+            params["thread_id"] = thread_id
+
         data = {
             "username": self.username,
             "allowed_mentions": {"parse": []},
@@ -52,14 +55,46 @@ class DiscordWebhook:
                 for i, (name, content) in enumerate(message.files)
             }
             payload = {"payload_json": (None, json.dumps(data), "application/json")}
-            r = self._request("POST", url, files={**payload, **files})
+            r = self._request("POST", self.webhook_url, params=params, files={**payload, **files})
         else:
-            r = self._request("POST", url, json=data)
+            r = self._request("POST", self.webhook_url, params=params, json=data)
 
         return r.json()["id"]
 
-    def edit(self, message_id: str, message: DiscordMessage) -> None:
+    def send_forum_post(self, thread_name: str, message: DiscordMessage) -> Tuple[str, str]:
+        # Création d’un post (thread) dans un salon Forum via webhook
+        safe_name = (thread_name or "Post").strip()[:100]
+        params: dict[str, Any] = {"wait": "true", "thread_name": safe_name}
+
+        data = {
+            "username": self.username,
+            "allowed_mentions": {"parse": []},
+            "embeds": message.embeds,
+        }
+
+        if message.files:
+            files = {
+                f"files[{i}]": (name, content, "application/octet-stream")
+                for i, (name, content) in enumerate(message.files)
+            }
+            payload = {"payload_json": (None, json.dumps(data), "application/json")}
+            r = self._request("POST", self.webhook_url, params=params, files={**payload, **files})
+        else:
+            r = self._request("POST", self.webhook_url, params=params, json=data)
+
+        js = r.json()
+        msg_id = js["id"]
+        thread_id = js.get("channel_id") or ""
+        if not thread_id:
+            raise RuntimeError("Création post forum: thread_id introuvable (channel_id manquant).")
+        return msg_id, thread_id
+
+    def edit(self, message_id: str, message: DiscordMessage, *, thread_id: str | None = None) -> None:
         url = f"https://discord.com/api/webhooks/{self.webhook_id}/{self.webhook_token}/messages/{message_id}"
+        params: dict[str, Any] = {}
+        if thread_id:
+            params["thread_id"] = thread_id
+
         data: dict[str, Any] = {
             "username": self.username,
             "allowed_mentions": {"parse": []},
@@ -67,37 +102,39 @@ class DiscordWebhook:
         }
 
         if message.files:
-            # Remplacement simple des pièces jointes : on indique qu'on ne garde rien
             data["attachments"] = []
             files = {
                 f"files[{i}]": (name, content, "application/octet-stream")
                 for i, (name, content) in enumerate(message.files)
             }
             payload = {"payload_json": (None, json.dumps(data), "application/json")}
-            self._request("PATCH", url, files={**payload, **files})
+            self._request("PATCH", url, params=params, files={**payload, **files})
         else:
-            self._request("PATCH", url, json=data)
+            self._request("PATCH", url, params=params, json=data)
 
-    def delete(self, message_id: str) -> None:
+    def delete(self, message_id: str, *, thread_id: str | None = None) -> None:
         url = f"https://discord.com/api/webhooks/{self.webhook_id}/{self.webhook_token}/messages/{message_id}"
-        self._request("DELETE", url)
+        params: dict[str, Any] = {}
+        if thread_id:
+            params["thread_id"] = thread_id
+        self._request("DELETE", url, params=params)
 
-    def create_message_set(self, messages: list[DiscordMessage]) -> list[str]:
+    def create_message_set(self, messages: list[DiscordMessage], *, thread_id: str | None = None) -> list[str]:
         ids: list[str] = []
         for msg in messages:
-            ids.append(self.send(msg))
+            ids.append(self.send(msg, thread_id=thread_id))
         return ids
 
-    def upsert_message_set(self, existing_ids: list[str], messages: list[DiscordMessage]) -> list[str]:
+    def upsert_message_set(self, existing_ids: list[str], messages: list[DiscordMessage], *, thread_id: str | None = None) -> list[str]:
         new_ids: list[str] = []
         for i, msg in enumerate(messages):
             if i < len(existing_ids):
-                self.edit(existing_ids[i], msg)
+                self.edit(existing_ids[i], msg, thread_id=thread_id)
                 new_ids.append(existing_ids[i])
             else:
-                new_ids.append(self.send(msg))
+                new_ids.append(self.send(msg, thread_id=thread_id))
         for j in range(len(messages), len(existing_ids)):
-            self.delete(existing_ids[j])
+            self.delete(existing_ids[j], thread_id=thread_id)
         return new_ids
 
 class WebhookRouter:

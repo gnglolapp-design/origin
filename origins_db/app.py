@@ -1,5 +1,3 @@
-import os
-import json
 from origins_db.config import Settings
 from origins_db.hideout.discover import discover_all
 from origins_db.hideout.fetch import RenderClient
@@ -15,7 +13,6 @@ def run() -> None:
     store.load()
 
     router = WebhookRouter(settings.webhooks, settings.webhook_name)
-
     render = RenderClient(headless=True)
 
     try:
@@ -25,36 +22,58 @@ def run() -> None:
             if entity is None:
                 continue
 
-            entity_id = entity.entity_id
-            content_hash = entity.content_hash
-
-            prev = store.get(entity_id)
-            if prev and prev.get("hash") == content_hash:
-                continue  # pas de changement
+            prev = store.get(entity.entity_id)
+            if prev and prev.get("hash") == entity.content_hash:
+                continue
 
             plan = build_message_plan(entity, settings)
 
-            # publier / éditer
-            channel_key = plan.channel_key
-            wh = router.get(channel_key)
+            use_forum = (entity.kind == "character") and ("personnages_forum" in settings.webhooks)
+            channel_key = "personnages_forum" if use_forum else plan.channel_key
 
+            wh = router.get(channel_key)
             if wh is None:
-                # fallback : boss sans salon dédié -> boss_infos
                 wh = router.get("boss_infos")
                 channel_key = "boss_infos"
+            if wh is None:
+                raise RuntimeError("Aucun webhook valide trouvé (boss_infos manquant).")
 
-            if prev and prev.get("messages"):
-                # éditer les messages existants (et ajuster si le nombre change)
-                new_message_ids = wh.upsert_message_set(prev["messages"], plan.messages)
+            thread_id = None
+
+            if use_forum:
+                thread_id = (prev or {}).get("thread_id")
+
+                if thread_id and prev and prev.get("messages"):
+                    new_ids = wh.upsert_message_set(prev["messages"], plan.messages, thread_id=thread_id)
+                else:
+                    first_id, created_thread_id = wh.send_forum_post(entity.title, plan.messages[0])
+                    rest_ids = [wh.send(m, thread_id=created_thread_id) for m in plan.messages[1:]]
+                    new_ids = [first_id] + rest_ids
+                    thread_id = created_thread_id
+
+                # nettoyage: si avant c’était publié ailleurs, tenter suppression (si webhook dispo)
+                if prev and prev.get("channel") and prev.get("channel") != channel_key:
+                    old_wh = router.get(prev["channel"])
+                    if old_wh and prev.get("messages"):
+                        for mid in prev["messages"]:
+                            try:
+                                old_wh.delete(mid)
+                            except Exception:
+                                pass
+
             else:
-                new_message_ids = wh.create_message_set(plan.messages)
+                if prev and prev.get("messages"):
+                    new_ids = wh.upsert_message_set(prev["messages"], plan.messages)
+                else:
+                    new_ids = wh.create_message_set(plan.messages)
 
-            store.set(entity_id, {
-                "hash": content_hash,
+            store.set(entity.entity_id, {
+                "hash": entity.content_hash,
                 "url": entity.url,
                 "title": entity.title,
                 "channel": channel_key,
-                "messages": new_message_ids
+                "messages": new_ids,
+                "thread_id": thread_id
             })
             store.save()
 
