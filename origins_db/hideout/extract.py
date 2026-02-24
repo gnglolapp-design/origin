@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -15,9 +15,9 @@ TAB_LABELS_CHARACTER = ["Basic Info", "Weapons", "Armor", "Potentials"]
 CARD_LABEL_FR: dict[str, str] = {
     "Passive": "Passif",
     "Normal Attack": "Attaque normale",
-    "Special Attack": "Attaque spéciale",
-    "Normal Skill": "Compétence normale",
-    "Attack Skill": "Compétence d’attaque",
+    "Special Attack": "Attaque spÃ©ciale",
+    "Normal Skill": "CompÃ©tence normale",
+    "Attack Skill": "CompÃ©tence dâ€™attaque",
 }
 
 
@@ -97,7 +97,7 @@ def _close_cookie_banner(page) -> None:
 
 
 def _main_inner_text(page) -> str:
-    # IMPORTANT : on garde les retours à la ligne (sinon impossible de parser les cartes)
+    # IMPORTANT : on garde les retours Ã  la ligne (sinon impossible de parser les cartes)
     try:
         main = page.locator("main").first
         if main.count() > 0:
@@ -296,9 +296,9 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
         prof_blocks.append({"type": "kv", "title": "Stats", "items": [{"k": k, "v": v} for k, v in stats_kv]})
 
     info_keys = [
-        ("Élément", ("element", "attribute")),
-        ("Rôle", ("role", "class", "archetype")),
-        ("Rareté", ("rarity",)),
+        ("Ã‰lÃ©ment", ("element", "attribute")),
+        ("RÃ´le", ("role", "class", "archetype")),
+        ("RaretÃ©", ("rarity",)),
     ]
     infos: list[str] = []
     for label_fr, keys in info_keys:
@@ -326,14 +326,14 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
                 label = c.get("label") or ""
                 label_fr = _label_to_fr(label, settings)
                 norm_cards.append({
-                    "label": label_fr or "Compétence",
+                    "label": label_fr or "CompÃ©tence",
                     "name": c.get("name") or "",
                     "desc": translate_en_fr(c.get("desc") or "", settings.keep_terms),
                 })
 
             header_lines = []
             if welem:
-                header_lines.append(f"**Affinité** : {translate_en_fr(_clean(str(welem)), settings.keep_terms)}")
+                header_lines.append(f"**AffinitÃ©** : {translate_en_fr(_clean(str(welem)), settings.keep_terms)}")
 
             blocks: list[dict] = []
             if header_lines:
@@ -357,7 +357,7 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
                 pn = _pick_first_str(p, ("name", "title"))
                 pd = _pick_first_str(p, ("description", "desc", "effect", "text"))
                 if pn and pd:
-                    items.append(f"**{translate_en_fr(_clean(pn), settings.keep_terms)}** — {translate_en_fr(_clean(pd), settings.keep_terms)}")
+                    items.append(f"**{translate_en_fr(_clean(pn), settings.keep_terms)}** â€” {translate_en_fr(_clean(pd), settings.keep_terms)}")
                 elif pn:
                     items.append(translate_en_fr(_clean(pn), settings.keep_terms))
         if items:
@@ -377,7 +377,7 @@ def _extract_character_from_next(next_data: dict, title_fallback: str, settings:
                 an = _pick_first_str(a, ("name", "title"))
                 ad = _pick_first_str(a, ("description", "desc", "effect", "text"))
                 if an and ad:
-                    items.append(f"**{translate_en_fr(_clean(an), settings.keep_terms)}** — {translate_en_fr(_clean(ad), settings.keep_terms)}")
+                    items.append(f"**{translate_en_fr(_clean(an), settings.keep_terms)}** â€” {translate_en_fr(_clean(ad), settings.keep_terms)}")
                 elif an:
                     items.append(translate_en_fr(_clean(an), settings.keep_terms))
         if items:
@@ -412,7 +412,7 @@ def _value_to_blocks(val, settings: Settings) -> list[dict]:
                 nm = _pick_first_str(it, ("name", "title", "label"))
                 ds = _pick_first_str(it, ("description", "desc", "text", "effect"))
                 if nm and ds:
-                    items.append(f"**{translate_en_fr(_clean(nm), settings.keep_terms)}** — {translate_en_fr(_clean(ds), settings.keep_terms)}")
+                    items.append(f"**{translate_en_fr(_clean(nm), settings.keep_terms)}** â€” {translate_en_fr(_clean(ds), settings.keep_terms)}")
                 elif nm:
                     items.append(translate_en_fr(_clean(nm), settings.keep_terms))
         if items:
@@ -466,12 +466,12 @@ def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings
         hero = _normalize_img(hero)
 
     key_order = [
-        ("overview", "Résumé"),
-        ("mechanics", "Mécaniques"),
-        ("strategy", "Stratégies"),
+        ("overview", "RÃ©sumÃ©"),
+        ("mechanics", "MÃ©caniques"),
+        ("strategy", "StratÃ©gies"),
         ("tips", "Conseils"),
         ("phases", "Phases"),
-        ("rewards", "Récompenses"),
+        ("rewards", "RÃ©compenses"),
     ]
 
     sections: list[Section] = []
@@ -487,13 +487,13 @@ def _extract_boss_from_next(next_data: dict, boss_label: str, settings: Settings
             if isinstance(v, str) and len(v) > 180:
                 big.append(translate_en_fr(_clean(v), settings.keep_terms))
         if big:
-            sections.append(Section(title="Résumé", blocks=[{"type": "text", "text": "\n\n".join(big[:3])}], images=[]))
+            sections.append(Section(title="RÃ©sumÃ©", blocks=[{"type": "text", "text": "\n\n".join(big[:3])}], images=[]))
 
     return hero, sections
 
 
 # ----------------------------
-# Sections génériques (combat / infos générales / boss index)
+# Sections gÃ©nÃ©riques (combat / infos gÃ©nÃ©rales / boss index)
 # ----------------------------
 
 def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[Section]:
@@ -522,7 +522,7 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
         if cur_bullets:
             items = []
             for b in cur_bullets:
-                b = _clean(b).lstrip("•").strip()
+                b = _clean(b).lstrip("â€¢").strip()
                 if b:
                     items.append(translate_en_fr(b, settings.keep_terms))
             if items:
@@ -581,7 +581,7 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
         text = _clean((main).get_text(" ", strip=True))
         if text:
             sections.append(Section(
-                title="Résumé",
+                title="RÃ©sumÃ©",
                 blocks=[{"type": "text", "text": translate_en_fr(text, settings.keep_terms)}],
                 images=[]
             ))
@@ -590,7 +590,7 @@ def _extract_sections_generic_from_html(html: str, settings: Settings) -> list[S
 
 
 # ----------------------------
-# Point d'entrée
+# Point d'entrÃ©e
 # ----------------------------
 
 def extract_entity(render: RenderClient, target, settings: Settings) -> Entity | None:
@@ -631,7 +631,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             basic_text = _main_inner_text(page)
             basic_lines = _lines(basic_text)
 
-            # Stats : ligne "Stat 1234" (plus tolérant)
+            # Stats : ligne "Stat 1234" (plus tolÃ©rant)
             stats_pairs: list[tuple[str, str]] = []
             for ln in basic_lines:
                 if len(ln) > 48:
@@ -648,7 +648,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             if stats_pairs:
                 sections.append(Section(
                     title="Profil",
-                    blocks=[{"type": "kv", "title": "Stats", "items": [{"k": k, "v": v} for k, v in stats_pairs[:40]}],
+                    blocks=[{"type": "kv", "title": "Stats", "items": [{"k": k, "v": v} for k, v in stats_pairs[:40]]}],
                     images=[]
                 ))
 
@@ -661,7 +661,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             except Exception:
                 pass
 
-            # Détecter les boutons d'armes (pas seulement <button>)
+            # DÃ©tecter les boutons d'armes (pas seulement <button>)
             weapon_buttons = []
             try:
                 cands = page.locator(
@@ -700,7 +700,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
 
                 labels = list(CARD_LABEL_FR.keys())
 
-                # Commence à la première carte (évite le bruit)
+                # Commence Ã  la premiÃ¨re carte (Ã©vite le bruit)
                 start_idx = None
                 for idx, tok in enumerate(toks):
                     if tok in labels:
@@ -795,7 +795,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
         channel_key = "infos_generales"
         entity_id = "guide:infos_generales"
         sections = _extract_sections_generic_from_html(html_full, settings)
-        out_title = "Infos générales"
+        out_title = "Infos gÃ©nÃ©rales"
 
     elif target.kind == "boss_index":
         try:
@@ -809,7 +809,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
         sections = _extract_sections_generic_from_html(page.content(), settings)
         channel_key = "boss_infos"
         entity_id = "boss:index"
-        out_title = "Boss — infos générales"
+        out_title = "Boss â€” infos gÃ©nÃ©rales"
 
     elif target.kind == "boss_tab":
         label = (target.extra or {}).get("tab") or (target.title_hint or "Boss")
@@ -849,7 +849,7 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
         header_name = "fallback.jpg" if header_shot else None
         sections = [Section(
             title="Contenu",
-            blocks=[{"type": "text", "text": "Impossible d’extraire proprement cette page. La capture jointe sert de secours."}],
+            blocks=[{"type": "text", "text": "Impossible dâ€™extraire proprement cette page. La capture jointe sert de secours."}],
             images=[]
         )]
 
