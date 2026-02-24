@@ -50,7 +50,6 @@ class DiscordWebhook:
 
         data = {
             "username": self.username,
-            "thread_name": safe_name,
             "allowed_mentions": {"parse": []},
             "embeds": message.embeds,
         }
@@ -74,7 +73,6 @@ class DiscordWebhook:
 
         data = {
             "username": self.username,
-            "thread_name": safe_name,
             "allowed_mentions": {"parse": []},
             "embeds": message.embeds,
         }
