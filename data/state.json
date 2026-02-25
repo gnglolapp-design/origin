@@ -1,49 +1,49 @@
 {
   "boss:albion": {
     "channel": "albion",
-    "hash": "d1765216e2925ab2f2e7a1da1bb663f17adbe31d1ba01e97dd22dc7c721a1541",
+    "hash": "361f2e517e62b5d486d5723dcf018278e93127015da03bbcd3d0cb1d01246642",
     "messages": [
-      "1475995003858714858"
+      "1476162481876373518"
     ],
     "thread_id": null,
     "title": "Albion",
-    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide#albion"
+    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide?boss=albion&tab=albion#albion"
   },
   "boss:drake": {
     "channel": "drake",
-    "hash": "e956b872014b2245acf9da7cfe5949303dba425465ef7b0ae403061abd64e3e0",
+    "hash": "f6ef05302da29ff2c07eea31ddcfd924bb59528ee33a110788f3cc2ff90e8018",
     "messages": [
-      "1475994719636029551"
+      "1476162083992240217"
     ],
     "thread_id": null,
     "title": "Drake",
-    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide#drake"
+    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide?boss=drake&tab=drake#drake"
   },
   "boss:grey_demon": {
     "channel": "grey_demon",
-    "hash": "0d7f00383a504e2fa043f3e888ce33bd9bbc16c31bc902f5fbde828f2b2b0764",
+    "hash": "e031464ff6c1ae358e437ac8d3cc61970d862ab88a71645a3d474107134159bc",
     "messages": [
-      "1475994937513345175"
+      "1476162404386603058"
     ],
     "thread_id": null,
     "title": "Grey Demon",
-    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide#grey_demon"
+    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide?boss=grey-demon&tab=grey_demon#grey_demon"
   },
   "boss:guardian_golem": {
     "channel": "guardian_golem",
-    "hash": "2e1b045dd6a7bedec9e5abfa0b9da4db767a19f27a2bff8b082aa24f20a106a9",
+    "hash": "9785be88878b78973426b312d5e00f8b641fc42e7200cb4e4b347cca13adca5b",
     "messages": [
-      "1475994659221147841"
+      "1476162016631849112"
     ],
     "thread_id": null,
     "title": "Guardian Golem",
-    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide#guardian_golem"
+    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide?boss=guardian-golem&tab=guardian_golem#guardian_golem"
   },
   "boss:index": {
     "channel": "boss_infos",
-    "hash": "b300c077bd0330c623e11b014bcebff89d868df4b52f7c1b3f16c030c1e646ca",
+    "hash": "eeeaa3cc1d30422dab0c7d3ebbecb07101f83d537e7913ce74778f7bdb3f2bf9",
     "messages": [
-      "1475994592468799508"
+      "1476161927674728500"
     ],
     "thread_id": null,
     "title": "Boss â€” infos gÃ©nÃ©rales",
@@ -51,13 +51,13 @@
   },
   "boss:red_demon": {
     "channel": "red_demon",
-    "hash": "1a2921dc8000643e8e93037c40d9c385ec84011e4448cbd9a361999d318c8c85",
+    "hash": "ef3c4661542465ab6dfc09f216cfe04af21a79d29287f0b4783edc3ee3b9f1b2",
     "messages": [
-      "1475994871633547385"
+      "1476162329434525767"
     ],
     "thread_id": null,
     "title": "Red Demon",
-    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide#red_demon"
+    "url": "https://hideoutgacha.com/games/seven-deadly-sins-origin/boss-guide?boss=red-demon&tab=red_demon#red_demon"
   },
   "character:ban": {
     "channel": "personnages_forum",
@@ -331,10 +331,10 @@
   },
   "guide:combat": {
     "channel": "combat",
-    "hash": "24a8edf4be2f2130f9950d2dc0e067d940330a1a63bcad41db2d10f5df3a66f9",
+    "hash": "d45b20f5889979db9e0e5a7dfb093051fa817dceb080b0a2648dff397cf3d3a7",
     "messages": [
-      "1475994432066027560",
-      "1475994435056570409"
+      "1476161744953937992",
+      "1476161747797672039"
     ],
     "thread_id": null,
     "title": "Guide de combat",
