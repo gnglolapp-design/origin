@@ -837,13 +837,15 @@ def extract_entity(render: RenderClient, target, settings: Settings) -> Entity |
             sections = _extract_sections_generic_from_html(html_now, settings)
 
         slug = _slugify(label)
+
+        slug_dash = slug.replace("_","-")
         try:
             if page.url and page.url != target.url:
                 out_url = page.url
         except Exception:
             pass
         if out_url == target.url:
-            out_url = f"{target.url}#{slug}"
+            out_url = f"{target.url}?boss={slug_dash}&tab={slug}#{slug}"
         channel_key = slug if slug in settings.webhooks else "boss_infos"
         entity_id = f"boss:{slug}"
         out_title = label
