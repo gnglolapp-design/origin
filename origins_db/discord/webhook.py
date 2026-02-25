@@ -138,8 +138,15 @@ class DiscordWebhook:
 
         for i, msg in enumerate(messages):
             if i < len(existing_ids):
-                self.edit(existing_ids[i], msg)
-                new_ids.append(existing_ids[i])
+                try:
+                    self.edit(existing_ids[i], msg)
+                    new_ids.append(existing_ids[i])
+                except RuntimeError as e:
+                    # Si le message n’existe plus (supprimé), on le recrée
+                    if "Unknown Message" in str(e) or '"code": 10008' in str(e) or "10008" in str(e):
+                        new_ids.append(self.send(msg, thread_id=thread_id))
+                    else:
+                        raise
             else:
                 new_ids.append(self.send(msg, thread_id=thread_id))
 
